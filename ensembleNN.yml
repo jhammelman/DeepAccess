@@ -1,0 +1,9 @@
+name: ensembleNN
+channels:
+  - bioconda
+  - r
+  - defaults
+  - conda-forge
+  - conda-canary
+prefix: /data/cgs/jhammelm/env/miniconda3/envs/ensembleNN
+
