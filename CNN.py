@@ -16,7 +16,7 @@ class CNN():
                     HOMER_motifs = list(np.load('homer_matrix.npy'))
                     filter_len = max([HOMER_motifs[k].shape[0] for k in range(len(HOMER_motifs))])
                     conv_layer = Conv1D(input_shape=seq_shape,
-                                        filters=len(JASPAR_motifs)*2,
+                                        filters=len(HOMER_motifs)*2,
                                         kernel_size=35,
                                         padding="valid",
                                         activation="relu",

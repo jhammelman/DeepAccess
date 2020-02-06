@@ -15,7 +15,7 @@ from keras import activations
 from importance_utils import *
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "5"
 
 config = tf.ConfigProto()
 config.gpu_options.per_process_gpu_memory_fraction = 0.4
@@ -27,8 +27,8 @@ set_session(sess)
 print(device_lib.list_local_devices())
 parser = argparse.ArgumentParser()
 parser.add_argument('testfasta')
-parser.add_argument('comparisons')
 parser.add_argument('model',help="model folder")
+parser.add_argument('ioutfile')
 parser.add_argument('outfile')
 opts=parser.parse_args()
 
@@ -36,31 +36,34 @@ X = fa_to_onehot(opts.testfasta)
 model_folders = [opts.model+"/"+d for d in os.listdir(opts.model) if os.path.isdir(opts.model+"/"+d)]
 with open(opts.model+"/model_acc.pkl","rb") as f:
     accuracies = pickle.load(f)
-    accuracies = {key.split('/')[-1]:accuracies[key] for key in accuracies.keys()}
-
-comps = [tuple(l.strip().split()) for l in open(opts.comparisons)]
-print(comps)
-for comp in comps:
-    print(comp)
-    if comp[0] == 'None':
-        c1 = []
-        c2 = [int(c) for c in comp[1].split('-')]
-    elif comp[1] == 'None':
-        c2 = []
-        c1 = [int(c) for c in comp[0].split('-')]
-    else:
-        c1 = [int(c) for c in comp[0].split('-')]
-        c2 = [int(c) for c in comp[1].split('-')]
-
-    for mi,model in enumerate(model_folders):
-        grads_i = accuracies[model.split('/')[-1]]*saliency(0,model+"/model.h5",X,c1,c2)*X
-        
+total_grads_ed = []
+total_grads_es = []
+for mi,model in enumerate(model_folders):
+    print(model)
+    grads_ed = saliency(0,model+"/model.h5",0,X,30)*X
+    grads_es = saliency(0,model+"/model.h5",1,X,30)*X
     # grads are a X size matrix with importance scores for each
     # sequence, for each position in the sequence
-    with open(opts.outfile+'_'+comp[0]+'vs'+comp[1]+'.pkl', 'wb') as handle:
-        pickle.dump(grads_i, handle, protocol=2)
+    total_grads_ed.append(grads_ed)
+    total_grads_es.append(grads_es)
+    with open(model+"/"+opts.ioutfile+'_tp2.pkl', 'wb') as handle:
+        pickle.dump(grads_ed, handle, protocol=2)
+    with open(model+"/"+opts.ioutfile+'_tp1.pkl', 'wb') as handle:
+        pickle.dump(grads_es, handle, protocol=2)
         
+saliency_ed = np.zeros(total_grads_ed[0].shape)
 
+for mi,model in enumerate(model_folders):    
+    saliency_ed += accuracies[model]*total_grads_ed[mi]
+saliency_ed = saliency_ed/sum(accuracies.values())
+with open(opts.outfile+'_tp1.pkl','wb') as handle:
+    pickle.dump(saliency_ed,handle,protocol=2)
 
+saliency_es = np.zeros(total_grads_es[0].shape)
+for mi,model in enumerate(model_folders):    
+    saliency_es += accuracies[model]*total_grads_es[mi]
+saliency_es = saliency_es/sum(accuracies.values())
+with open(opts.outfile+'_tp2.pkl','wb') as handle:
+    pickle.dump(saliency_es,handle,protocol=2)
 
 

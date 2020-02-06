@@ -4,12 +4,14 @@ from keras.layers import Input
 from keras import activations
 import keras
 import numpy as np
+from keras import activations
 
 #code modified from
 #https://blog.keras.io/how-convolutional-neural-networks-see-the-world.html
-def saliency(conv_layer,model_file,class_index,input_data,n=30,lambda_reg=0.1):
+def saliency(conv_layer,model_file,input_data,pos_index,neg_index,n=5,lambda_reg=0.1):
     K.set_learning_phase(0)
     model = keras.models.load_model(model_file)
+    print(model.summary())
     inp = model.input                                           # input placeholder
     outputs = [layer.output for layer in model.layers]          # all layer outputs
     functors = [K.function([inp], [out]) for out in outputs]    # evaluation functions
@@ -17,37 +19,45 @@ def saliency(conv_layer,model_file,class_index,input_data,n=30,lambda_reg=0.1):
     l = input_l
     for i in range(conv_layer, len(model.layers)):
         l = model.layers[i](l)
-
+    l.activation = activations.linear
     model_revised = Model(input_l, l)
-    if class_index==1:
-        other_index=0
-    else:
-        other_index=1
-    ngrads = []
-    for _ in range(n):
-        layer_outs = [func([input_data + np.random.normal(size=input_data.shape)]) for func in functors]
 
-        layer_output = model_revised.layers[-1].get_output_at(1)
-        input_seq = model_revised.input
-        loss = K.mean(layer_output[:,class_index]-layer_output[:,other_index]) + lambda_reg*K.abs(input_seq)
-        # compute the gradient of the input picture wrt this loss
-        grads = K.gradients(loss, input_seq)[0]
-        
-        # normalization trick: we normalize the gradient
-        grads /= (K.sqrt(K.mean(K.square(grads))) + 1e-5)
-
-        # this function returns the loss and grads given the input picture
-        iterate = K.function([input_seq], [loss, grads])
-        if conv_layer == 0:
-            loss,gradient = iterate([input_data])
+    batch_grads = []
+    batch_size=100
+    for batch_start in range(0,input_data.shape[0],batch_size):
+        if (batch_start+batch_size) > input_data.shape[0]:
+            batch_in = input_data[batch_start:,:,:]
         else:
-            loss,gradient = iterate(layer_outs[conv_layer-1])
-        ngrads.append(gradient)
+            batch_in = input_data[batch_start:(batch_start+batch_size),:,:]
+        ngrads = []
+        for _ in range(n):  
+            layer_outs = [func([batch_in + np.random.normal(size=batch_in.shape)]) for func in functors]
+            layer_output = model_revised.layers[-1].get_output_at(1)
+            input_seq = model_revised.input
+            if len(pos_index) == 0:
+                loss = K.mean(K.sum([-layer_output[:,ni] for ni in neg_index],axis=1)) + lambda_reg*K.abs(input_seq)
+            elif len(neg_index) == 0:
+                loss = K.mean(K.sum([layer_output[:,pi] for pi in pos_index],axis=1)) + lambda_reg*K.abs(input_seq)
+            else:
+                loss = K.mean(K.sum([layer_output[:,pi] for pi in pos_index],axis=1)-K.sum([layer_output[:,ni] for ni in neg_index],axis=1)) + lambda_reg*K.abs(input_seq)
+            # compute the gradient of the input picture wrt this loss
+            grads = K.gradients(loss, input_seq)[0]
+        
+            # normalization trick: we normalize the gradient
+            grads /= (K.sqrt(K.mean(K.square(grads))) + 1e-5)
 
+            # this function returns the loss and grads given the input picture
+            iterate = K.function([input_seq], [loss, grads])
+            if conv_layer == 0:
+                loss,gradient = iterate([batch_in+np.random.normal(size=batch_in.shape,loc=0,scale=0.2)])
+            else:
+                loss,gradient = iterate(layer_outs[conv_layer-1])
+            ngrads.append(gradient)
+        batch_grads.append(np.mean(ngrads,axis=0))
 
     del model_revised
     del model
-    return np.mean(np.array(ngrads),axis=0)
+    return np.concatenate(batch_grads,axis=0)
 
 def trace_to_conv_layer(conv_layer,model_file,class_index,seed_seqs,lambda_reg):
     K.set_learning_phase(0)
