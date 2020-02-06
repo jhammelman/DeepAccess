@@ -29,3 +29,7 @@ Sequence saliency takes in a fasta file, a comparisons file for discriminative c
 
 Example:
 `python extract_importance_ensemble.py data/test.fa data/comparisons.txt example example/test_saliency`
+
+## Interpretation
+
+notebook analyze-example.ipynb gives example of processing saliency results
