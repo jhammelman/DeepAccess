@@ -6,8 +6,15 @@ import keras
 import numpy as np
 from keras import activations
 
-#code modified from
-#https://blog.keras.io/how-convolutional-neural-networks-see-the-world.html
+# saliency code modified from
+# https://github.com/keras-team/keras/blob/master/examples/conv_filter_visualization.py
+#All contributions by François Chollet:
+#Copyright (c) 2015 - 2019, François Chollet.
+#All rights reserved.
+
+#All other contributions:
+#Copyright (c) 2015 - 2019, the respective contributors.
+#All rights reserved.
 def saliency(conv_layer,model_file,input_data,pos_index,neg_index,n=5,lambda_reg=0.1):
     K.set_learning_phase(0)
     model = keras.models.load_model(model_file)
